@@ -7,6 +7,7 @@ import os
 import re
 import sys
 from datetime import datetime
+from pathlib import Path
 from ai_scientist.llm import create_client
 
 from contextlib import contextmanager
@@ -83,21 +84,27 @@ def parse_arguments():
         help="Attempt ID, used to distinguish same idea in different attempts in parallel runs",
     )
     parser.add_argument(
+        "--resume-experiment-dir",
+        type=str,
+        default=None,
+        help="Resume from the latest completed main-stage checkpoint in this experiment directory",
+    )
+    parser.add_argument(
         "--model_agg_plots",
         type=str,
-        default="o3-mini-2025-01-31",
+        default="codex",
         help="Model to use for plot aggregation",
     )
     parser.add_argument(
         "--model_writeup",
         type=str,
-        default="o1-preview-2024-09-12",
+        default="codex",
         help="Model to use for writeup",
     )
     parser.add_argument(
         "--model_citation",
         type=str,
-        default="gpt-4o-2024-11-20",
+        default="codex",
         help="Model to use for citation gathering",
     )
     parser.add_argument(
@@ -109,13 +116,13 @@ def parse_arguments():
     parser.add_argument(
         "--model_writeup_small",
         type=str,
-        default="gpt-4o-2024-05-13",
+        default="codex",
         help="Smaller model to use for writeup",
     )
     parser.add_argument(
         "--model_review",
         type=str,
-        default="gpt-4o-2024-11-20",
+        default="codex",
         help="Model to use for review main text and captions",
     )
     parser.add_argument(
@@ -194,10 +201,27 @@ if __name__ == "__main__":
 
     idea = ideas[args.idea_idx]
 
-    date = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    idea_dir = f"experiments/{date}_{idea['Name']}_attempt_{args.attempt_id}"
-    print(f"Results will be saved in {idea_dir}")
-    os.makedirs(idea_dir, exist_ok=True)
+    if args.resume_experiment_dir:
+        idea_dir = args.resume_experiment_dir
+        checkpoint_candidates = list(
+            Path(idea_dir).glob("logs/*/stage_*/checkpoint.pkl")
+        )
+        if not checkpoint_candidates:
+            raise FileNotFoundError(
+                f"No completed-stage checkpoint found in {idea_dir}"
+            )
+        resume_checkpoint = max(
+            checkpoint_candidates, key=lambda path: path.stat().st_mtime
+        )
+        idea_config_path = osp.join(idea_dir, "bfts_config.yaml")
+        print(f"Results will continue in {idea_dir}")
+        print(f"Resuming from checkpoint {resume_checkpoint}")
+    else:
+        date = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        idea_dir = f"experiments/{date}_{idea['Name']}_attempt_{args.attempt_id}"
+        print(f"Results will be saved in {idea_dir}")
+        os.makedirs(idea_dir, exist_ok=True)
+        resume_checkpoint = None
 
     # Convert idea json to markdown file
     idea_path_md = osp.join(idea_dir, "idea.md")
@@ -214,7 +238,8 @@ if __name__ == "__main__":
     else:
         code_path = None
 
-    idea_to_markdown(ideas[args.idea_idx], idea_path_md, code_path)
+    if resume_checkpoint is None:
+        idea_to_markdown(ideas[args.idea_idx], idea_path_md, code_path)
 
     dataset_ref_code = None
     if args.add_dataset_ref:
@@ -241,19 +266,22 @@ if __name__ == "__main__":
     if added_code is not None:
         ideas[args.idea_idx]["Code"] = added_code
 
-    # Store raw idea json
-    idea_path_json = osp.join(idea_dir, "idea.json")
-    with open(idea_path_json, "w") as f:
-        json.dump(ideas[args.idea_idx], f, indent=4)
+    if resume_checkpoint is None:
+        # Store raw idea json
+        idea_path_json = osp.join(idea_dir, "idea.json")
+        with open(idea_path_json, "w") as f:
+            json.dump(ideas[args.idea_idx], f, indent=4)
 
-    config_path = "bfts_config.yaml"
-    idea_config_path = edit_bfts_config_file(
-        config_path,
-        idea_dir,
-        idea_path_json,
+        config_path = "bfts_config.yaml"
+        idea_config_path = edit_bfts_config_file(
+            config_path,
+            idea_dir,
+            idea_path_json,
+        )
+
+    perform_experiments_bfts(
+        idea_config_path, resume_checkpoint=resume_checkpoint
     )
-
-    perform_experiments_bfts(idea_config_path)
     experiment_results_dir = osp.join(idea_dir, "logs/0-run/experiment_results")
     if os.path.exists(experiment_results_dir):
         shutil.copytree(
@@ -344,26 +372,6 @@ if __name__ == "__main__":
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             continue
 
-    # Additional cleanup: find any orphaned processes containing specific keywords
-    keywords = ["python", "torch", "mp", "bfts", "experiment"]
-    for proc in psutil.process_iter(["name", "cmdline"]):
-        try:
-            # Check both process name and command line arguments
-            cmdline = " ".join(proc.cmdline()).lower()
-            if any(keyword in cmdline for keyword in keywords):
-                proc.send_signal(signal.SIGTERM)
-                proc.wait(timeout=3)
-                if proc.is_running():
-                    proc.kill()
-        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.TimeoutExpired):
-            continue
-
-    # Finally, terminate the current process
-    # current_process.send_signal(signal.SIGTERM)
-    # try:
-    #     current_process.wait(timeout=3)
-    # except psutil.TimeoutExpired:
-    #     current_process.kill()
-
-    # exit the program
+    # Only children of this run are cleaned up. Scanning for generic process
+    # names such as "python" can terminate the web workbench or unrelated jobs.
     sys.exit(0)

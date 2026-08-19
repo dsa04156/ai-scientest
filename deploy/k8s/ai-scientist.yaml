@@ -1,0 +1,247 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ai-scientist
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ai-scientist-output
+  namespace: ai-scientist
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ai-scientist-web-runs
+  namespace: ai-scientist
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ai-scientist-experiments
+  namespace: ai-scientist
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-scientist
+  namespace: ai-scientist
+  labels:
+    app.kubernetes.io/name: ai-scientist
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ai-scientist
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ai-scientist
+    spec:
+      automountServiceAccountToken: false
+      nodeSelector:
+        kubernetes.io/hostname: etri-ser0001-cg0msb
+      initContainers:
+        - name: codex-auth-init
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - install -m 600 /codex-auth-source/auth.json /codex-home/auth.json
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            runAsGroup: 1002
+            runAsNonRoot: true
+            runAsUser: 1002
+          volumeMounts:
+            - name: codex-auth-source
+              mountPath: /codex-auth-source/auth.json
+              readOnly: true
+            - name: codex-home
+              mountPath: /codex-home
+      containers:
+        - name: web
+          image: python:3.11-slim-bookworm
+          imagePullPolicy: IfNotPresent
+          workingDir: /home/jinuk/codex-work/ai-scientest
+          command:
+            - /home/jinuk/codex-work/ai-scientest/.venv/bin/python
+            - run_web.py
+            - --host
+            - 0.0.0.0
+            - --port
+            - "8010"
+          env:
+            - name: S2_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ai-scientist-secrets
+                  key: S2_API_KEY
+            - name: CODEX_HOME
+              value: /home/jinuk/.codex
+            - name: AI_SCIENTIST_CODEX_MODEL
+              value: gpt-5.6-sol
+            - name: AI_SCIENTIST_CODEX_REASONING_EFFORT
+              value: xhigh
+            - name: MPLCONFIGDIR
+              value: /tmp/matplotlib
+            - name: TORCHINDUCTOR_CACHE_DIR
+              value: /tmp/torchinductor
+            - name: XDG_CACHE_HOME
+              value: /tmp/cache
+            - name: USER
+              value: ai-scientist
+            - name: LOGNAME
+              value: ai-scientist
+            - name: HOME
+              value: /home/jinuk
+          ports:
+            - name: http
+              containerPort: 8010
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 250m
+              memory: 1Gi
+            limits:
+              cpu: "4"
+              memory: 24Gi
+              nvidia.com/gpu: "1"
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            runAsGroup: 1002
+            runAsNonRoot: true
+            runAsUser: 1002
+          volumeMounts:
+            - name: codex-home
+              mountPath: /home/jinuk/.codex
+            - name: codex-skills
+              mountPath: /home/jinuk/.codex/skills
+              readOnly: true
+            - name: codex-bin
+              mountPath: /usr/local/bin/codex
+              readOnly: true
+            - name: codex-code-mode-host
+              mountPath: /usr/local/bin/codex-code-mode-host
+              readOnly: true
+            - name: source
+              mountPath: /home/jinuk/codex-work/ai-scientest
+              readOnly: true
+            - name: uv-python
+              mountPath: /home/jinuk/.local/share/uv/python
+              readOnly: true
+            - name: output
+              mountPath: /home/jinuk/codex-work/ai-scientest/output
+            - name: web-runs
+              mountPath: /home/jinuk/codex-work/ai-scientest/web_runs
+            - name: experiments
+              mountPath: /home/jinuk/codex-work/ai-scientest/experiments
+      volumes:
+        - name: codex-auth-source
+          hostPath:
+            path: /home/jinuk/.codex/auth.json
+            type: File
+        - name: codex-home
+          emptyDir:
+            medium: Memory
+            sizeLimit: 128Mi
+        - name: codex-skills
+          hostPath:
+            path: /home/jinuk/.codex/skills
+            type: Directory
+        - name: codex-bin
+          hostPath:
+            path: /home/jinuk/.npm-global/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex
+            type: File
+        - name: codex-code-mode-host
+          hostPath:
+            path: /home/jinuk/.npm-global/lib/node_modules/@openai/codex/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex-code-mode-host
+            type: File
+        - name: source
+          hostPath:
+            path: /home/jinuk/codex-work/ai-scientest
+            type: Directory
+        - name: uv-python
+          hostPath:
+            path: /home/jinuk/.local/share/uv/python
+            type: Directory
+        - name: output
+          persistentVolumeClaim:
+            claimName: ai-scientist-output
+        - name: web-runs
+          persistentVolumeClaim:
+            claimName: ai-scientist-web-runs
+        - name: experiments
+          persistentVolumeClaim:
+            claimName: ai-scientist-experiments
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-scientist
+  namespace: ai-scientist
+spec:
+  selector:
+    app.kubernetes.io/name: ai-scientist
+  ports:
+    - name: http
+      port: 8010
+      targetPort: http
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ai-scientist
+  namespace: ai-scientist
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: ai-scientist.192.168.0.56.nip.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ai-scientist
+                port:
+                  name: http

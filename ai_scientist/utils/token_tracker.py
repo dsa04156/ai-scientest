@@ -154,6 +154,10 @@ def track_token_usage(func):
         logging.info("kwargs: ", kwargs)
 
         result = await func(*args, **kwargs)
+        # Some high-level helpers return parsed text/history rather than a raw
+        # provider response. Those calls cannot expose provider token details.
+        if not hasattr(result, "model"):
+            return result
         model = result.model
         timestamp = result.created
 
@@ -190,6 +194,8 @@ def track_token_usage(func):
                 "Either 'prompt' or 'system_message' must be provided for token tracking"
             )
         result = func(*args, **kwargs)
+        if not hasattr(result, "model"):
+            return result
         model = result.model
         timestamp = result.created
         logging.info("args: ", args)

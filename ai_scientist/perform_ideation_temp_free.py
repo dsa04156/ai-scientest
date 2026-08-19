@@ -13,9 +13,15 @@ from ai_scientist.llm import (
     create_client,
     get_response_from_llm,
 )
+from ai_scientist.idea_recommendation import evaluate_ideas, recommendation_path_for
 
 from ai_scientist.tools.semantic_scholar import SemanticScholarSearchTool
 from ai_scientist.tools.base_tool import BaseTool
+from ai_scientist.tools.literature_survey import (
+    MultiSourceLiteratureSurvey,
+    build_literature_query,
+    format_survey_for_prompt,
+)
 
 # Create tool instances
 semantic_scholar_tool = SemanticScholarSearchTool()
@@ -60,6 +66,8 @@ tool_names_str = ", ".join(tool_names)
 
 system_prompt = f"""You are an experienced AI researcher who aims to propose high-impact research ideas resembling exciting grant proposals. Feel free to propose any novel ideas or experiments; make sure they are novel. Be very creative and think out of the box. Each proposal should stem from a simple and elegant question, observation, or hypothesis about the topic. For example, they could involve very interesting and simple interventions or investigations that explore new possibilities or challenge existing assumptions. Clearly clarify how the proposal distinguishes from the existing literature.
 
+Start with the smallest central question and one discriminating test. Do not invent a named construct, metric, or elaborate factorial design unless it is necessary to distinguish concrete rival explanations. Compare the closest prior work, negative results, replication attempts, boundary conditions, and simpler baselines. Clearly distinguish replication, refutation, and extension claims. Treat Kurate ratings only as secondary discovery signals and verify scientific claims against linked primary papers.
+
 Ensure that the proposal does not require resources beyond what an academic lab could afford. These proposals should lead to papers that are publishable at top ML conferences.
 
 You have access to the following tools:
@@ -97,6 +105,12 @@ Note: You should perform at least one literature search before finalizing your i
 
 # Define the initial idea generation prompt
 idea_generation_prompt = """{workshop_description}
+
+Here is the automatic multi-source literature survey run once for this job:
+
+'''
+{literature_survey}
+'''
 
 Here are the proposals that you have already generated:
 
@@ -145,6 +159,14 @@ def generate_temp_free_idea(
     else:
         print(f"No ideas found in {idea_fname}. Starting from scratch.")
 
+    literature_query = build_literature_query(workshop_description)
+    literature_survey = MultiSourceLiteratureSurvey().run(literature_query)
+    literature_survey_text = format_survey_for_prompt(literature_survey)
+    literature_survey_path = osp.splitext(idea_fname)[0] + ".literature.json"
+    with open(literature_survey_path, "w") as survey_file:
+        json.dump(literature_survey, survey_file, indent=2, ensure_ascii=False)
+    print(f"[Literature Survey] stored artifact={literature_survey_path}")
+
     for gen_idx in range(max_num_generations):
         print()
         print(f"Generating proposal {gen_idx + 1}/{max_num_generations}")
@@ -160,6 +182,7 @@ def generate_temp_free_idea(
                     # Use the initial idea generation prompt
                     prompt_text = idea_generation_prompt.format(
                         workshop_description=workshop_description,
+                        literature_survey=literature_survey_text,
                         prev_ideas_string=prev_ideas_string,
                     )
                 else:
@@ -273,7 +296,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--model",
         type=str,
-        default="gpt-4o-2024-05-13",
+        default="codex",
         choices=AVAILABLE_LLMS,
         help="Model to use for AI Scientist.",
     )
@@ -317,3 +340,10 @@ if __name__ == "__main__":
         num_reflections=args.num_reflections,
     )
     print(f"{args.workshop_file} generated {len(ideas)} ideas.")
+    try:
+        recommendation_path = recommendation_path_for(idea_fname)
+        evaluate_ideas(ideas, recommendation_path, model=args.model)
+        print(f"Stored proposal-only recommendation in {recommendation_path}")
+    except Exception as error:
+        # Recommendation is supplementary; a scoring failure must not discard ideas.
+        print(f"Recommendation skipped: {error}")

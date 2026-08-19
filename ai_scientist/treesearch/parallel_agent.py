@@ -28,6 +28,15 @@ logger = logging.getLogger("ai-scientist")
 ExecCallbackType = Callable[[str, bool], ExecutionResult]
 
 
+def _extract_plan_and_code(completion_text: str) -> tuple[str, str] | None:
+    """Accept code-only completions when the model omits the requested preamble."""
+    code = extract_code(completion_text)
+    if not code:
+        return None
+    plan = extract_text_up_to_code(completion_text)
+    return plan or "Implementation generated directly from the experiment plan.", code
+
+
 def _safe_pickle_test(obj, name="object"):
     """Test if an object can be pickled"""
     try:
@@ -666,12 +675,9 @@ class MinimalAgent:
                 temperature=self.cfg.agent.code.temp,
             )
 
-            code = extract_code(completion_text)
-            nl_text = extract_text_up_to_code(completion_text)
-
-            if code and nl_text:
-                # merge all code blocks into a single string
-                return nl_text, code
+            parsed = _extract_plan_and_code(completion_text)
+            if parsed is not None:
+                return parsed
 
             print("Plan + code extraction failed, retrying...")
             prompt["Parsing Feedback"] = (
@@ -1232,12 +1238,9 @@ class ParallelAgent:
                 temperature=self.cfg.agent.code.temp,
             )
 
-            code = extract_code(completion_text)
-            nl_text = extract_text_up_to_code(completion_text)
-
-            if code and nl_text:
-                # merge all code blocks into a single string
-                return nl_text, code
+            parsed = _extract_plan_and_code(completion_text)
+            if parsed is not None:
+                return parsed
             print("Plan + code extraction failed, retrying...")
             prompt["Parsing Feedback"] = (
                 "The code extraction failed. Make sure to use the format ```python ... ``` for the code blocks."

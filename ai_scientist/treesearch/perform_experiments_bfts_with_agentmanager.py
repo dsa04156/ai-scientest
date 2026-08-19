@@ -24,7 +24,7 @@ from rich.tree import Tree
 from .utils.config import load_task_desc, prep_agent_workspace, save_run, load_cfg
 from .agent_manager import AgentManager
 from pathlib import Path
-from .agent_manager import Stage
+from .agent_manager import Stage, StageTransition
 from .log_summarization import overall_summarize
 
 
@@ -55,10 +55,70 @@ def journal_to_rich_tree(journal: Journal, cfg):
     return tree
 
 
-def perform_experiments_bfts(config_path: str):
+def _resume_manager(checkpoint_path: Path):
+    """Restore the last completed main stage and advance to the next one."""
+    with checkpoint_path.open("rb") as checkpoint_file:
+        checkpoint = pickle.load(checkpoint_file)
+
+    required = {
+        "journals",
+        "stage_history",
+        "task_desc",
+        "cfg",
+        "workspace_dir",
+        "current_stage",
+    }
+    missing = required.difference(checkpoint)
+    if missing:
+        raise ValueError(
+            f"Checkpoint is missing required fields: {', '.join(sorted(missing))}"
+        )
+
+    cfg = checkpoint["cfg"]
+    completed_stage = checkpoint["current_stage"]
+    manager = AgentManager(
+        task_desc=json.dumps(checkpoint["task_desc"]),
+        cfg=cfg,
+        workspace_dir=Path(checkpoint["workspace_dir"]),
+    )
+    manager.journals = checkpoint["journals"]
+    manager.stage_history = checkpoint["stage_history"]
+    manager.completed_stages = list(manager.journals)
+    manager.stages = [completed_stage]
+    manager.current_stage_number = completed_stage.stage_number
+
+    next_stage = manager._create_next_main_stage(
+        completed_stage, manager.journals[completed_stage.name]
+    )
+    if next_stage is None:
+        manager.current_stage = None
+    else:
+        manager.stage_history.append(
+            StageTransition(
+                from_stage=completed_stage.name,
+                to_stage=next_stage.name,
+                reason="Resuming after the last completed main-stage checkpoint",
+                config_adjustments={},
+            )
+        )
+        manager.stages.append(next_stage)
+        manager.journals[next_stage.name] = Journal()
+        manager.current_stage = next_stage
+
+    return cfg, manager
+
+
+def perform_experiments_bfts(
+    config_path: str, resume_checkpoint: str | Path | None = None
+):
     # turn config path string into a path object
     config_path = Path(config_path)
-    cfg = load_cfg(config_path)
+    checkpoint_path = Path(resume_checkpoint) if resume_checkpoint else None
+    if checkpoint_path is not None:
+        cfg, manager = _resume_manager(checkpoint_path)
+    else:
+        cfg = load_cfg(config_path)
+        manager = None
     logger.info(f'Starting run "{cfg.exp_name}"')
 
     task_desc = load_task_desc(cfg)
@@ -67,20 +127,25 @@ def perform_experiments_bfts(config_path: str):
 
     global_step = 0
 
-    with Status("Preparing agent workspace (copying and extracting files) ..."):
-        prep_agent_workspace(cfg)
+    if checkpoint_path is None:
+        with Status("Preparing agent workspace (copying and extracting files) ..."):
+            prep_agent_workspace(cfg)
 
     def cleanup():
         if global_step == 0:
             shutil.rmtree(cfg.workspace_dir)
 
-    atexit.register(cleanup)
+    if checkpoint_path is None:
+        atexit.register(cleanup)
 
-    manager = AgentManager(
-        task_desc=task_desc,
-        cfg=cfg,
-        workspace_dir=Path(cfg.workspace_dir),
-    )
+    if manager is None:
+        manager = AgentManager(
+            task_desc=task_desc,
+            cfg=cfg,
+            workspace_dir=Path(cfg.workspace_dir),
+        )
+    else:
+        print(f"Resuming experiments from checkpoint: {checkpoint_path}")
 
     prog = Progress(
         TextColumn("[progress.description]{task.description}"),

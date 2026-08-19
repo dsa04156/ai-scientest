@@ -60,7 +60,56 @@ pip install -r requirements.txt
 
 Installation usually takes no more than one hour.
 
+### Local Web Workbench
+
+This installation includes a local web workbench for creating ideas, launching
+experiments, watching stage progress and live logs, stopping a run, and opening
+generated artifacts.
+
+```bash
+source .venv/bin/activate
+python run_web.py
+```
+
+Open `http://127.0.0.1:8010` locally, or use this machine's LAN IP from another
+device. This installation binds to `0.0.0.0` by default, so use it only on a
+trusted network.
+
 ### Supported Models and API Keys
+
+#### Codex CLI (local default in this installation)
+
+This installation includes a local adapter that uses `codex exec` and the
+existing Codex login instead of requiring `OPENAI_API_KEY`. Use `codex` as the
+model name; it is now the default for ideation, tree search, plot analysis,
+write-up, citations, and review. To override the Codex model, set
+`AI_SCIENTIST_CODEX_MODEL`. Advanced configuration paths also accept a model
+name such as `codex/gpt-5.6-sol`.
+
+Codex reasoning defaults to `xhigh` for research quality. Override it with
+`AI_SCIENTIST_CODEX_REASONING_EFFORT` (`none`, `low`, `medium`, `high`,
+`xhigh`, or `max`).
+
+Codex calls run ephemerally in a read-only sandbox. Set
+`AI_SCIENTIST_CODEX_TIMEOUT` to change the per-call timeout (default: 1200
+seconds).
+
+Ideation runs one bounded multi-source survey before generating candidates. It
+fans out Semantic Scholar (when keyed), the arXiv Atom API, optional Kurate
+enrichment, a primary-source Codex scout, and an adversarial Codex scout looking
+for negative results and simpler baselines. Source failures are isolated and the
+prompt records whether novelty checking is complete, partial, or unverified.
+Kurate ratings are discovery signals, not peer review, and must be checked
+against the linked primary paper. `LITERATURE_CODEX_TIMEOUT` controls each Codex
+scout (default: 300 seconds), while `LITERATURE_CODEX_RESULT_LIMIT` caps each
+agent at two deeply verified papers by default; `KURATE_REQUEST_TIMEOUT` and
+`ARXIV_REQUEST_TIMEOUT` control their network lanes.
+
+The Codex scout prompt requests `academic-research-suite` for research and
+`insane-search` only as a targeted fallback after a 402/403/WAF block. The
+Kubernetes deployment mounts the local skill catalog and Codex's code-mode host
+read-only so those agents can use research and web tools; survey correctness
+still does not depend on either skill being available.
 
 #### OpenAI Models
 
@@ -80,7 +129,7 @@ Next, configure valid [AWS Credentials](https://docs.aws.amazon.com/cli/v1/userg
 
 #### Semantic Scholar API (Literature Search)
 
-Our code can optionally use a Semantic Scholar API Key (`S2_API_KEY`) for higher throughput during literature search [if you have one](https://www.semanticscholar.org/product/api). This is used during both the ideation and paper writing stages. The system should work without it, though you might encounter rate limits or reduced novelty checking during ideation. If you experience issues with Semantic Scholar, you can skip the citation phase during paper generation.
+Our code can optionally use a Semantic Scholar API Key (`S2_API_KEY`) for higher throughput during literature search [if you have one](https://www.semanticscholar.org/product/api). This is used during both the ideation and paper writing stages. Ideation continues without it through arXiv, Kurate, and Codex scouts, while the later citation phase still benefits from S2 metadata. If you experience issues with Semantic Scholar, you can skip the citation phase during paper generation.
 
 #### Setting API Keys
 
@@ -138,7 +187,7 @@ Key tree search configuration parameters in `bfts_config.yaml`:
     -   `debug_prob`: The probability of attempting to debug a failing node.
     -   `num_drafts`: The number of initial root nodes (i.e., the number of independent trees to grow) during Stage 1.
 
-Example command to run AI-Scientist-v2 using a generated idea file (e.g., `my_research_topic.json`). Please review `bfts_config.yaml` for detailed tree search parameters (the default config includes `claude-3-5-sonnet` for experiments). Do not set `load_code` if you do not want to initialize experimentation with a code snippet.
+Example command to run AI-Scientist-v2 using a generated idea file (e.g., `my_research_topic.json`). Please review `bfts_config.yaml` for detailed tree search parameters (this installation uses the login-backed `codex` provider for experiments). Do not set `load_code` if you do not want to initialize experimentation with a code snippet.
 
 ```bash
 python launch_scientist_bfts.py \

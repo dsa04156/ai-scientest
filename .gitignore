@@ -187,6 +187,12 @@ experiments/
 aisci_outputs/
 slurm_logs/
 .out
+output/
+web_runs/
+
+# Local agent and browser-tool state
+.codex/
+.playwright-cli/
 
 # final papers
 final_papers/

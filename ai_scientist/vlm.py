@@ -6,11 +6,13 @@ import backoff
 import openai
 import os
 from PIL import Image
+from ai_scientist.codex_cli import CodexClient, is_codex_model
 from ai_scientist.utils.token_tracker import track_token_usage
 
 MAX_NUM_TOKENS = 4096
 
 AVAILABLE_VLMS = [
+    "codex",
     "gpt-4o-2024-05-13",
     "gpt-4o-2024-08-06",
     "gpt-4o-2024-11-20",
@@ -51,6 +53,12 @@ def encode_image_to_base64(image_path: str) -> str:
 
 @track_token_usage
 def make_llm_call(client, model, temperature, system_message, prompt):
+    if is_codex_model(model):
+        return client.chat.completions.create(
+            model=model,
+            messages=[{"role": "system", "content": system_message}, *prompt],
+            n=1,
+        )
     if model.startswith("ollama/"):
         return client.chat.completions.create(
             model=model.replace("ollama/", ""),
@@ -94,6 +102,12 @@ def make_llm_call(client, model, temperature, system_message, prompt):
 
 @track_token_usage
 def make_vlm_call(client, model, temperature, system_message, prompt):
+    if is_codex_model(model):
+        return client.chat.completions.create(
+            model=model,
+            messages=[{"role": "system", "content": system_message}, *prompt],
+            n=1,
+        )
     if model.startswith("ollama/"):
         return client.chat.completions.create(
             model=model.replace("ollama/", ""),
@@ -194,6 +208,9 @@ def get_response_from_vlm(
 
 def create_client(model: str) -> tuple[Any, str]:
     """Create client for vision-language model."""
+    if is_codex_model(model):
+        print(f"Using Codex CLI with model {model}.")
+        return CodexClient(model), model
     if model in [
         "gpt-4o-2024-05-13",
         "gpt-4o-2024-08-06",

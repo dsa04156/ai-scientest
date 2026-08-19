@@ -23,7 +23,7 @@ exec:
 generate_report: True
 # LLM settings for final report from journal
 report:
-  model: gpt-4o-2024-11-20
+  model: codex
   temp: 1.0
 
 experiment:
@@ -54,19 +54,19 @@ agent:
 
   # LLM settings for coding
   code:
-    model: anthropic.claude-3-5-sonnet-20241022-v2:0
+    model: codex
     temp: 1.0
     max_tokens: 12000
 
   # LLM settings for evaluating program output / tracebacks
   feedback:
-    model: gpt-4o-2024-11-20
+    model: codex
     # gpt-4o
     temp: 0.5
     max_tokens: 8192
 
   vlm_feedback:
-    model: gpt-4o-2024-11-20
+    model: codex
     temp: 0.5
     max_tokens: null
 
@@ -75,13 +75,11 @@ agent:
     debug_prob: 0.5
     num_drafts: 3
 
-  # Options for summarizing findings and selecting the best node
-  # If not specified, the default behavior will be used.
+  # Keep orchestration calls on the same Codex login-backed provider.
+  summary:
+    model: codex
+    temp: 0.3
 
-  # summary:
-  #   model: gpt-4o
-  #   temp: 0.3
-
-  # select_node:
-  #   model: gpt-4o
-  #   temp: 0.3
+  select_node:
+    model: codex
+    temp: 0.3

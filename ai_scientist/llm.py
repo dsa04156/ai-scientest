@@ -8,9 +8,12 @@ import anthropic
 import backoff
 import openai
 
+from ai_scientist.codex_cli import CodexClient, is_codex_model, run_codex
+
 MAX_NUM_TOKENS = 4096
 
 AVAILABLE_LLMS = [
+    "codex",
     "claude-3-5-sonnet-20240620",
     "claude-3-5-sonnet-20241022",
     # OpenAI models
@@ -277,7 +280,17 @@ def get_response_from_llm(
     if msg_history is None:
         msg_history = []
 
-    if "claude" in model:
+    if is_codex_model(model):
+        new_msg_history = msg_history + [{"role": "user", "content": msg}]
+        content = run_codex(
+            system_message=system_message,
+            messages=new_msg_history,
+            model=model,
+        )
+        new_msg_history = new_msg_history + [
+            {"role": "assistant", "content": content}
+        ]
+    elif "claude" in model:
         new_msg_history = msg_history + [
             {
                 "role": "user",
@@ -478,6 +491,9 @@ def extract_json_between_markers(llm_output: str) -> dict | None:
 
 
 def create_client(model) -> tuple[Any, str]:
+    if is_codex_model(model):
+        print(f"Using Codex CLI with model {model}.")
+        return CodexClient(model), model
     if model.startswith("claude-"):
         print(f"Using Anthropic API with model {model}.")
         return anthropic.Anthropic(), model

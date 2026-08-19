@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Codex로 구동되는 AI Scientist 연구 실행 작업대" />
+    <title>AI Scientist · Research Workbench</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23141919'/%3E%3Cpath d='M8 6h16M12 6v7L7 23a2 2 0 0 0 2 3h14a2 2 0 0 0 2-3l-5-10V6M10 20h12' fill='none' stroke='%2363d7bd' stroke-width='2'/%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">본문으로 건너뛰기</a>
+    <div class="app-shell">
+      <aside class="rail">
+        <div class="brand" aria-label="NAIS Science AI Scientist">
+          <div class="brand-mark brand-bars" aria-hidden="true"><span></span><span></span><span></span></div>
+          <div>
+            <strong>NAIS Science</strong>
+            <span>AI Scientist · Internal Workspace</span>
+          </div>
+        </div>
+
+        <nav class="rail-nav" aria-label="주요 메뉴">
+          <button class="nav-item is-active" type="button" data-scroll="workspace">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V8l8-4 8 4v11M8 19v-5h8v5" /></svg>
+            <span>작업대</span>
+          </button>
+          <button class="nav-item" type="button" data-scroll="live-observation">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h3l2-6 4 12 2-6h5" /></svg>
+            <span>관찰 기록</span>
+          </button>
+          <button class="nav-item" type="button" data-scroll="artifacts">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6zM14 3v5h5M9 13h7M9 17h5" /></svg>
+            <span>산출물</span>
+          </button>
+          <a class="nav-item" href="/guide.html">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14v14H5zM9 9h6M9 13h6M9 17h4" /></svg>
+            <span>시스템 안내</span>
+          </a>
+        </nav>
+
+        <nav class="related-nav" aria-label="연결된 서비스">
+          <p class="nav-section-label">CONNECTED</p>
+          <a class="nav-item service-link" href="http://research-hub.192.168.0.56.nip.io/">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM8 9h8M8 13h8" /></svg>
+            <span>Science Platform</span><span class="external-arrow" aria-hidden="true">↗</span>
+          </a>
+          <a class="nav-item service-link" href="http://mini-science-ai-os.192.168.0.56.nip.io/">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5" /></svg>
+            <span>제품 문서</span><span class="external-arrow" aria-hidden="true">↗</span>
+          </a>
+        </nav>
+
+        <div class="system-card" aria-label="시스템 상태">
+          <div class="system-row">
+            <span class="status-lamp" id="codex-lamp"></span>
+            <span>Codex CLI</span>
+            <strong id="codex-status">확인 중</strong>
+          </div>
+          <div class="system-row">
+            <span class="status-lamp" id="gpu-lamp"></span>
+            <span>GPU</span>
+            <strong id="gpu-status">확인 중</strong>
+          </div>
+          <div class="system-row model-row">
+            <span class="status-lamp is-on"></span>
+            <span id="model-status">모델 확인 중</span>
+            <strong id="reasoning-status">—</strong>
+          </div>
+        </div>
+
+        <p class="rail-note">긴 연구 실행은 브라우저를 닫아도 서버에서 계속됩니다.</p>
+      </aside>
+
+      <main id="main">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">NAIS SCIENCE / AI SCIENTIST</p>
+            <h1>무엇을 밝혀볼까요?</h1>
+          </div>
+          <div class="topbar-actions">
+            <span class="quiet-badge"><span class="pulse-dot"></span> Local only</span>
+            <button class="danger-button quick-stop" id="quick-stop-button" type="button" hidden>
+              <span class="stop-square" aria-hidden="true"></span>
+              실행 중지
+            </button>
+            <button class="icon-button" id="refresh-button" type="button" aria-label="화면 새로고침" title="새로고침">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7" /></svg>
+            </button>
+          </div>
+        </header>
+
+        <div class="workbench-content">
+
+        <section class="workspace" id="workspace" aria-labelledby="workspace-title">
+          <div class="mode-switch" role="tablist" aria-label="실행 모드">
+            <button id="ideation-tab" class="mode-tab is-active" role="tab" aria-selected="true" aria-controls="ideation-panel" type="button">아이디어 생성</button>
+            <button id="experiment-tab" class="mode-tab" role="tab" aria-selected="false" aria-controls="experiment-panel" type="button">전체 연구 실행</button>
+          </div>
+
+          <div class="composer-panel" id="ideation-panel" role="tabpanel" aria-labelledby="ideation-tab">
+            <form id="ideation-form" class="launch-deck">
+              <div class="launch-fields">
+              <label class="field field-hero">
+                <span>연구 질문</span>
+                <input id="topic-title" name="title" minlength="3" maxlength="160" required placeholder="예: 작은 언어 모델의 자기검증은 언제 실패하는가?" />
+              </label>
+              <label class="field">
+                <span>연구 맥락과 기대하는 발견</span>
+                <textarea id="topic-abstract" name="abstract" minlength="20" maxlength="6000" required rows="4" placeholder="관찰한 문제, 검증하고 싶은 가설, 사용할 수 있는 데이터나 제약을 적어주세요."></textarea>
+              </label>
+              <div class="form-grid">
+                <label class="field">
+                  <span>키워드 <em>선택</em></span>
+                  <input id="topic-keywords" name="keywords" maxlength="300" placeholder="reasoning, calibration, small models" />
+                </label>
+                <label class="field compact-field">
+                  <span>아이디어 수</span>
+                  <select id="generation-count" name="generations">
+                    <option value="1">1개 · 빠른 탐색</option>
+                    <option value="3">3개 · 비교 탐색</option>
+                    <option value="5">5개 · 넓은 탐색</option>
+                  </select>
+                </label>
+                <label class="field compact-field">
+                  <span>성찰 라운드</span>
+                  <select id="reflection-count" name="reflections">
+                    <option value="1">1회</option>
+                    <option value="2" selected>2회</option>
+                    <option value="5">5회</option>
+                  </select>
+                </label>
+              </div>
+              <div class="composer-footer">
+                <p><span class="info-mark">i</span> S2·arXiv·Kurate와 독립 Codex 조사원의 병렬 검색·반증 검토를 거쳐 아이디어 JSON을 만듭니다.</p>
+                <button class="primary-button" type="submit">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7z" /></svg>
+                  아이디어 생성
+                </button>
+              </div>
+              </div>
+              <aside class="launch-preview" id="ideation-launch-preview" aria-label="아이디어 탐색 설계 미리보기" aria-live="polite">
+                <header class="launch-preview-header">
+                  <div><p class="eyebrow">LIVE PROTOCOL</p><h2>탐색 설계</h2></div>
+                  <span class="readiness-badge"><i id="ideation-ready-lamp"></i><strong id="ideation-ready-label">입력 대기</strong></span>
+                </header>
+                <p class="launch-preview-question" id="ideation-preview-question">연구 질문을 입력하면 실행 설계가 여기에 보입니다.</p>
+                <dl class="launch-metrics">
+                  <div><dt>독립 조사 레인</dt><dd>4</dd></div>
+                  <div><dt>후보 가설</dt><dd id="ideation-preview-candidates">1</dd></div>
+                  <div><dt>성찰 라운드</dt><dd id="ideation-preview-reflections">2</dd></div>
+                </dl>
+                <div class="protocol-route" aria-label="아이디어 탐색 경로">
+                  <span><i>01</i>S2 · arXiv</span><b aria-hidden="true">→</b>
+                  <span><i>02</i>Kurate · 조사원</span><b aria-hidden="true">→</b>
+                  <span><i>03</i>반증 · 확정</span>
+                </div>
+                <div class="launch-preview-footer">
+                  <span>탐색 폭</span><strong id="ideation-preview-depth">빠른 탐색</strong>
+                </div>
+              </aside>
+            </form>
+          </div>
+
+          <div class="composer-panel" id="experiment-panel" role="tabpanel" aria-labelledby="experiment-tab" hidden>
+            <form id="experiment-form" class="launch-deck">
+              <div class="launch-fields">
+              <div class="form-grid experiment-grid">
+                <label class="field">
+                  <span>아이디어 파일</span>
+                  <select id="idea-file" name="idea_path" required><option value="">불러오는 중…</option></select>
+                </label>
+                <label class="field">
+                  <span>실행할 아이디어</span>
+                  <select id="idea-index" name="idea_index" required><option value="0">파일을 먼저 선택하세요</option></select>
+                </label>
+              </div>
+              <div class="options-strip">
+                <label class="check-control"><input id="include-writeup" type="checkbox" checked /><span></span>논문 작성</label>
+                <label class="check-control"><input id="include-review" type="checkbox" checked /><span></span>동료 평가</label>
+                <label class="field inline-field"><span>인용 라운드</span><input id="citation-rounds" type="number" min="0" max="30" value="5" /></label>
+              </div>
+              <div class="risk-note">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2.8 20h18.4zM12 9v5M12 17.5v.5" /></svg>
+                <p><strong>긴 실행입니다.</strong> 트리 탐색, 코드 실행, 플롯, 논문 작성까지 수 시간이 걸릴 수 있으며 Codex 사용량이 발생합니다.</p>
+              </div>
+              <div class="composer-footer">
+                <p><span class="info-mark">i</span> 한 번에 하나의 연구만 실행해 GPU와 결과 디렉터리를 보호합니다.</p>
+                <button class="primary-button" type="submit">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7z" /></svg>
+                  전체 연구 시작
+                </button>
+              </div>
+              </div>
+              <aside class="launch-preview" id="experiment-launch-preview" aria-label="전체 연구 실행 설계 미리보기" aria-live="polite">
+                <header class="launch-preview-header">
+                  <div><p class="eyebrow">EXECUTION PLAN</p><h2>연구 패키지</h2></div>
+                  <span class="readiness-badge"><i id="experiment-ready-lamp"></i><strong id="experiment-ready-label">선택 대기</strong></span>
+                </header>
+                <p class="launch-preview-question" id="experiment-preview-title">실행할 아이디어를 선택하면 연구 경로가 여기에 보입니다.</p>
+                <dl class="launch-metrics">
+                  <div><dt>BFTS 단계</dt><dd>4</dd></div>
+                  <div><dt>인용 라운드</dt><dd id="experiment-preview-citations">5</dd></div>
+                  <div><dt>최종 검토</dt><dd id="experiment-preview-review">ON</dd></div>
+                </dl>
+                <div class="protocol-route" aria-label="전체 연구 실행 경로">
+                  <span><i>01</i>구현 · 튜닝</span><b aria-hidden="true">→</b>
+                  <span><i>02</i>Ablation · 플롯</span><b aria-hidden="true">→</b>
+                  <span><i>03</i>논문 · 심사</span>
+                </div>
+                <div class="launch-preview-footer">
+                  <span>산출물</span><strong id="experiment-preview-output">논문 · 동료 평가</strong>
+                </div>
+              </aside>
+            </form>
+          </div>
+        </section>
+
+        <section class="run-overview" aria-label="현재 실행 상태">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">RESEARCH PULSE</p>
+              <h2 id="active-title">실행 대기 중</h2>
+            </div>
+            <div class="run-actions">
+              <span class="run-state is-idle" id="run-state">IDLE</span>
+              <button class="secondary-button" id="idea-summary-button" type="button" hidden>후보 정리 보기</button>
+              <button class="secondary-button" id="result-summary-button" type="button" hidden>결과 요약 보기</button>
+              <button class="secondary-button" id="restart-button" type="button" hidden>체크포인트 재시작</button>
+              <button class="danger-button" id="stop-button" type="button" hidden>실행 중지</button>
+            </div>
+          </div>
+          <div class="progress-track" aria-label="전체 진행률">
+            <span id="progress-bar"></span>
+          </div>
+          <div class="topology-toolbar" aria-label="토폴로지 범례">
+            <span><i class="legend-dot is-current"></i>현재 실행</span>
+            <span><i class="legend-dot is-done"></i>검증 완료</span>
+            <span><i class="legend-dot"></i>대기</span>
+            <strong id="topology-runtime">gpt-5.6-sol · xhigh</strong>
+          </div>
+          <div class="research-topology" id="research-topology" aria-label="연구 작업 토폴로지" aria-live="polite"></div>
+          <div class="topology-readout" id="topology-readout" aria-live="polite">
+            <span class="topology-readout-index" id="topology-readout-index">01</span>
+            <div class="topology-readout-copy"><strong id="topology-readout-title">연구 질문</strong><span id="topology-readout-meta">INPUT · 주제와 제약</span></div>
+            <span class="topology-readout-state" id="topology-readout-state">대기</span>
+            <button class="topology-current-button" id="topology-current-button" type="button">현재 단계로</button>
+          </div>
+        </section>
+
+        <section class="experiment-summary" id="experiment-summary" aria-labelledby="experiment-summary-title" hidden>
+          <div class="experiment-summary-heading">
+            <div>
+              <p class="eyebrow">EXPERIMENT DECISION BRIEF</p>
+              <h2 id="experiment-summary-title">전체 연구 결과 요약</h2>
+            </div>
+            <span class="summary-scope" id="experiment-summary-scope">중간 결과</span>
+          </div>
+          <div id="experiment-summary-content"></div>
+        </section>
+
+        <section class="idea-summary" id="idea-summary" aria-labelledby="idea-summary-title" hidden>
+          <div class="idea-summary-heading">
+            <div>
+              <p class="eyebrow">IDEA DECISION BRIEF</p>
+              <h2 id="idea-summary-title">후보 아이디어 정리</h2>
+            </div>
+            <span class="count-badge" id="idea-summary-count">0</span>
+          </div>
+          <div class="idea-decision-note">
+            <div>
+              <span id="idea-decision-label">현재 결론</span>
+              <strong id="idea-decision-title">비교 가능한 가설 후보를 확보했습니다.</strong>
+              <p id="idea-decision-copy">아직 실험 전이라 후보 간 우열이나 최종 연구 결론은 정하지 않습니다.</p>
+            </div>
+            <div class="decision-next-step">
+              <span>NEXT EVIDENCE</span>
+              <p>후보 하나를 선택해 전체 연구를 실행하면 코드·지표·플롯을 근거로 결론을 판단할 수 있습니다.</p>
+            </div>
+          </div>
+          <div class="idea-candidate-list" id="idea-candidate-list">
+            <div class="idea-summary-loading">후보 정리본을 불러오는 중입니다…</div>
+          </div>
+        </section>
+
+        <section class="observation-grid" id="live-observation">
+          <article class="observation-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">LIVE OBSERVATION</p>
+                <h2>연구 기록</h2>
+              </div>
+              <div class="log-meta"><span id="log-count">0 lines</span><span id="elapsed-time">00:00:00</span></div>
+            </div>
+            <div class="terminal-empty" id="terminal-empty">
+              <svg viewBox="0 0 48 48" aria-hidden="true"><path d="M8 12h32v25H8zM13 18l5 4-5 4M22 27h10" /></svg>
+              <strong>아직 관찰 기록이 없습니다</strong>
+              <span>연구를 시작하면 Codex의 진행 과정과 실험 출력이 여기에 쌓입니다.</span>
+            </div>
+            <div class="terminal" id="terminal" role="log" aria-live="polite" aria-label="실시간 연구 로그" hidden></div>
+          </article>
+
+          <aside class="evidence-column" id="artifacts">
+            <section class="evidence-panel">
+              <div class="panel-heading compact">
+                <div><p class="eyebrow">EVIDENCE</p><h2>산출물</h2></div>
+                <span class="count-badge" id="artifact-count">0</span>
+              </div>
+              <div class="artifact-list" id="artifact-list">
+                <div class="small-empty">생성된 아이디어, 플롯, PDF가 이곳에 표시됩니다.</div>
+              </div>
+            </section>
+            <section class="history-panel">
+              <div class="panel-heading compact">
+                <div><p class="eyebrow">RUN ARCHIVE</p><h2>이번 세션</h2></div>
+              </div>
+              <div class="history-list" id="history-list"><div class="small-empty">실행 기록이 없습니다.</div></div>
+            </section>
+          </aside>
+        </section>
+        </div>
+      </main>
+    </div>
+
+    <dialog class="artifact-viewer" id="artifact-viewer" aria-labelledby="artifact-viewer-title">
+      <div class="reader-shell">
+        <header class="reader-toolbar">
+          <div class="reader-identity">
+            <span class="reader-file-mark" id="reader-file-mark">DOC</span>
+            <div>
+              <p class="eyebrow">RESEARCH ARTIFACT</p>
+              <h2 id="artifact-viewer-title">산출물 미리보기</h2>
+              <p class="reader-meta" id="reader-meta"></p>
+            </div>
+          </div>
+          <div class="reader-actions">
+            <a class="secondary-button" id="artifact-download" href="#" download>원본 다운로드</a>
+            <button class="icon-button" id="artifact-close" type="button" aria-label="산출물 닫기" title="닫기">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
+            </button>
+          </div>
+        </header>
+        <div class="reader-status" id="reader-status">산출물을 불러오는 중입니다…</div>
+        <article class="artifact-document" id="artifact-document" hidden></article>
+      </div>
+    </dialog>
+
+    <div class="toast-region" id="toast-region" aria-live="assertive"></div>
+    <script src="/app.js" defer></script>
+  </body>
+</html>
